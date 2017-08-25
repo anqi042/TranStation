@@ -6,7 +6,11 @@ import (
 )
 
 func RunGin(channel chan []byte) {
+
+
+
 	r := gin.Default()
+
 	r.POST("/write", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "FUCKING YEAH",

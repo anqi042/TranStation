@@ -3,11 +3,11 @@ package Parser
 import "fmt"
 import (
 	"encoding/json"
-
-
 	"strings"
 	"github.com/emirpasic/gods/sets/hashset"
 	"regexp"
+
+	"time"
 )
 
 type HostKV struct {
@@ -26,15 +26,19 @@ func GenFilter(src map[string]string) ([]*regexp.Regexp,*hashset.Set) {
 	var regs []*regexp.Regexp
 	eqSet := hashset.New()
 
-	for k,_ := range src{
-		if strings.HasPrefix(k,"REG_"){
+	for k,v := range src{
+		if strings.HasPrefix(k,"reg_"){
 
-			r, _ := regexp.Compile(k)
+			r, err := regexp.Compile(v)
+			if err != nil || r == nil{
+				fmt.Println("FUCK REGEXP")
+			}
 			regs = append(regs,r)
 		}else {
-			eqSet.Add(k)
+			eqSet.Add(v)
 		}
 	}
+	fmt.Println("regs",regs,"strs",eqSet)
 	return regs,eqSet
 }
 
@@ -112,13 +116,19 @@ func parseBody(body []byte,inMap  chan *HostKV , regs []*regexp.Regexp, eqSet *h
 			//filter here
 			if eqSet.Contains(theMap["key"].(string)) || matchReg(theMap["key"].(string),regs){
 				tmp := &HostKV{theMap["host"].(string),theMap["key"].(string), theMap["value"].(string)}
-				inMap <- tmp
+				fmt.Println("inMapLen:" , len(inMap))
+				if len(inMap) > 900{
+					//
+					time.Sleep(time.Second)
+					fmt.Println("take a rest and drop it")
+				}else{
+					inMap <- tmp
+				}
+
+
 			}else{
 				fmt.Println("drop it")
 			}
-
-
-
 		}
 	}
 }

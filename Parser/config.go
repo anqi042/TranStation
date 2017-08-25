@@ -13,10 +13,10 @@ func getSections() map[string]string{
 	secs := cfg.Sections()
 	itemKv := make(map[string]string)
 	for _,s := range secs{
-		keys := s.Keys()
-		for _,k := range keys{
+		keys := s.KeysHash()
+		for k,v := range keys{
 			//fmt.Println(k.Value())
-			itemKv[k.String()] = k.Value()
+			itemKv[k] = v
 		}
 	}
 	return itemKv
