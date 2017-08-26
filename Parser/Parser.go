@@ -14,7 +14,10 @@ type HostKV struct {
 	host string
 	key string
 	val string
+	app string
 }
+
+
 
 
 
@@ -48,10 +51,10 @@ func RaiseParser(in chan []byte)  {
 	const STATS_NOTGOOD  = "TS_NOTREADY"
 	const STATS_KEY = "AREUREADY?"
 */
-	itemKv := ReadItems()
+	itemKv,p2a := ReadItems()
 	regs, eqSet := GenFilter(itemKv)
-
-	host2items := make(map[string]map[string]string)
+	PingRedis()
+	//host2items := make(map[string]map[string]string)
 
 
 	mapC := make(chan *HostKV,1000)
@@ -60,7 +63,7 @@ func RaiseParser(in chan []byte)  {
 			select {
 			case byts := <- _in:
 				//parse http body here
-				parseBody(byts,mapC,regs,eqSet)
+				parseBody(byts,mapC,regs,eqSet,p2a)
 			}
 		}
 
@@ -73,24 +76,32 @@ func RaiseParser(in chan []byte)  {
 			select {
 			case hkv := <- mapC:
 
-				if host2items[hkv.host] == nil{
-					//initialize map
-					host2items[hkv.host] = make(map[string]string)
-					host2items[hkv.host]["host"] = hkv.host
-//					host2items[hkv.host][STATS_KEY] = STATS_GOOD
-				}
-				host2items[hkv.host][hkv.key] = hkv.val
-
-				//GetItems(itemKv,host2items[hkv.host])
-				fmt.Println(hkv.host,host2items[hkv.host][hkv.key])
-
-
-
+				fmt.Println("host-k-v-App",hkv.host,hkv.key,hkv.val,hkv.app)
+				PushData(hkv)
 			}
 		}
 	}()
 
 
+	//output
+	go func() {
+		ticker := time.NewTicker(time.Millisecond * 500)
+		c := ticker.C
+		for {
+			select {
+			case <- c:
+				ks,e := AllKeys()
+				if e == nil{
+					for _,k := range ks{
+						m := GetHMap(k)
+						fmt.Println(m)
+					}
+				}
+			}
+		}
+
+
+	}()
 
 }
 
@@ -103,20 +114,46 @@ func matchReg(src string,regs []*regexp.Regexp) bool {
 	return false
 }
 
-func parseBody(body []byte,inMap  chan *HostKV , regs []*regexp.Regexp, eqSet *hashset.Set){
+func translateZbxKey(zbxkey string,regs []*regexp.Regexp, eqSet *hashset.Set,p2a map[string]string) (string,bool){
+
+	if eqSet.Contains(zbxkey){
+		return p2a[zbxkey],false
+	}
+	for _,v := range regs{
+		if v.Match([]byte(zbxkey)){
+			return p2a[v.String()],true
+		}
+	}
+
+	return "",false
+
+}
+
+func parseBody(body []byte,inMap  chan *HostKV , regs []*regexp.Regexp, eqSet *hashset.Set, p2a map[string]string){
 	var dat map[string]interface{}
+	rNum,_ := regexp.Compile("[0-9]+")
 	err := json.Unmarshal(body,&dat)
 	if err != nil{
 		fmt.Println(err)
 	}else{
+
 		data := dat["data"].([]interface{})
 		for _,v := range data{
 			theMap := v.(map[string]interface{})
 			fmt.Println(theMap["host"], theMap["key"], theMap["value"])
 			//filter here
-			if eqSet.Contains(theMap["key"].(string)) || matchReg(theMap["key"].(string),regs){
-				tmp := &HostKV{theMap["host"].(string),theMap["key"].(string), theMap["value"].(string)}
-				fmt.Println("inMapLen:" , len(inMap))
+			if str,needNumber := translateZbxKey(theMap["key"].(string),regs,eqSet,p2a);str != ""{
+				fmt.Println(str)
+				app, _ := QuerySection(str)
+				if needNumber{
+					res := rNum.Find([]byte(theMap["key"].(string)))
+					fmt.Println("res Number=",string(res))
+
+					tmp := &HostKV{theMap["host"].(string), app +".TAG", string(res),app}
+					inMap <- tmp
+				}
+				tmp := &HostKV{theMap["host"].(string),str, theMap["value"].(string),app}
+
 				if len(inMap) > 900{
 					//
 					time.Sleep(time.Second)
