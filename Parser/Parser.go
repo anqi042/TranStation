@@ -6,8 +6,9 @@ import (
 	"strings"
 	"github.com/emirpasic/gods/sets/hashset"
 	"regexp"
-
+   "go.uber.org/zap"
 	"time"
+
 )
 
 type HostKV struct {
@@ -17,9 +18,10 @@ type HostKV struct {
 	app string
 }
 
-
-
-
+const REDIS_GET_INTERVAL  = 500
+const CHANNEL_HTTP_IN_LEN = 1000
+const CHANNEL_TO_REDIS_LEN = 1000
+const BATCH_SEND_SIZ = 2
 
 func GetItems(src map[string]string,m map[string]string)  {
 
@@ -34,7 +36,7 @@ func GenFilter(src map[string]string) ([]*regexp.Regexp,*hashset.Set) {
 
 			r, err := regexp.Compile(v)
 			if err != nil || r == nil{
-				fmt.Println("FUCK REGEXP")
+				MyLogger.Error("can not compile regexp")
 			}
 			regs = append(regs,r)
 		}else {
@@ -46,18 +48,14 @@ func GenFilter(src map[string]string) ([]*regexp.Regexp,*hashset.Set) {
 }
 
 func RaiseParser(in chan []byte)  {
-	/*
-	const STATS_GOOD  = "TS_READY"
-	const STATS_NOTGOOD  = "TS_NOTREADY"
-	const STATS_KEY = "AREUREADY?"
-*/
+
 	itemKv,p2a := ReadItems()
 	regs, eqSet := GenFilter(itemKv)
 	PingRedis()
-	//host2items := make(map[string]map[string]string)
 
 
-	mapC := make(chan *HostKV,1000)
+
+	mapC := make(chan *HostKV,CHANNEL_TO_REDIS_LEN)
 	go func(_in chan []byte) {
 		for{
 			select {
@@ -76,7 +74,7 @@ func RaiseParser(in chan []byte)  {
 			select {
 			case hkv := <- mapC:
 
-				fmt.Println("host-k-v-App",hkv.host,hkv.key,hkv.val,hkv.app)
+			//	fmt.Println("host-k-v-App",hkv.host,hkv.key,hkv.val,hkv.app)
 				PushData(hkv)
 			}
 		}
@@ -85,7 +83,7 @@ func RaiseParser(in chan []byte)  {
 
 	//output
 	go func() {
-		ticker := time.NewTicker(time.Millisecond * 500)
+		ticker := time.NewTicker(time.Millisecond * REDIS_GET_INTERVAL)
 		c := ticker.C
 		for {
 			select {
@@ -94,7 +92,11 @@ func RaiseParser(in chan []byte)  {
 				if e == nil{
 					for _,k := range ks{
 						m := GetHMap(k)
-						fmt.Println(m)
+						if m != nil{
+							MyLogger.Info("get map:",zap.Any("hmap",m))
+
+						}
+
 					}
 				}
 			}
@@ -156,15 +158,16 @@ func parseBody(body []byte,inMap  chan *HostKV , regs []*regexp.Regexp, eqSet *h
 
 				if len(inMap) > 900{
 					//
+					MyLogger.Warn("body to json channel is almost full")
 					time.Sleep(time.Second)
-					fmt.Println("take a rest and drop it")
+
 				}else{
 					inMap <- tmp
 				}
 
 
 			}else{
-				fmt.Println("drop it")
+				MyLogger.Info("useless key, discard it")
 			}
 		}
 	}

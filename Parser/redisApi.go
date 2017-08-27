@@ -27,8 +27,10 @@ func PingRedis() {
 func PushData(kv *HostKV){
 	key := kv.host+":"+kv.app
 	err := client.HSet(key,kv.key,kv.val)
-	if err != nil{
-		fmt.Println(err)
+	err2 :=client.HSet(key,"host",kv.host)
+	client.HSet(key,"topic",kv.app)
+	if err != nil || err2 != nil{
+		fmt.Println(err,err2)
 	}
 }
 
