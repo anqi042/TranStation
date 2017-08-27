@@ -9,9 +9,9 @@ func Init_logger()  {
 	rawJSON := []byte(`{
 	  "level": "debug",
 	  "encoding": "json",
-	  "outputPaths": ["stdout", "/tmp/logs"],
+	  "outputPaths": [ "/tmp/logs"],
 	  "errorOutputPaths": ["stderr"],
-	  "initialFields": {"foo": "bar"},
+
 	  "encoderConfig": {
 	    "messageKey": "message",
 	    "levelKey": "level",

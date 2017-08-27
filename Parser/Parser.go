@@ -94,7 +94,8 @@ func RaiseParser(in chan []byte)  {
 						m := GetHMap(k)
 						if m != nil{
 							MyLogger.Info("get map:",zap.Any("hmap",m))
-
+							res := FormatOutput(m)
+							MyLogger.Info("formatted:",zap.String("result",res))
 						}
 
 					}

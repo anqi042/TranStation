@@ -26,7 +26,10 @@ func PingRedis() {
 
 func PushData(kv *HostKV){
 	key := kv.host+":"+kv.app
-	err := client.HSet(key,kv.key,kv.val)
+	//delete any prefix
+	k := strings.TrimPrefix(kv.key,"reg_")
+
+	err := client.HSet(key,k,kv.val)
 	err2 :=client.HSet(key,"host",kv.host)
 	client.HSet(key,"topic",kv.app)
 	if err != nil || err2 != nil{
@@ -44,8 +47,10 @@ func GetHMap(key string) map[string]string{
 	fields := strings.Split(key,":")
 	res := client.HLen(key)
 	num,_ := res.Result()
+	//number excludes  app and host
+	num -= 2
 	if num < int64(QuerySectionNumber(fields[1])){
-		fmt.Println("not ready now...")
+		MyLogger.Info("not enough values")
 		return nil
 	}else{
 		hmap := client.HGetAll(key)
@@ -54,28 +59,3 @@ func GetHMap(key string) map[string]string{
 	}
 }
 
-/*
-func ExampleClient() {
-	err := client.Set("key", "value", 0).Err()
-	if err != nil {
-		panic(err)
-	}
-
-	val, err := client.Get("key").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("key", val)
-
-	val2, err := client.Get("key2").Result()
-	if err == redis.Nil {
-		fmt.Println("key2 does not exists")
-	} else if err != nil {
-		panic(err)
-	} else {
-		fmt.Println("key2", val2)
-	}
-	// Output: key value
-	// key2 does not exists
-}
-*/

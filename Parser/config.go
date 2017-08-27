@@ -4,9 +4,10 @@ import (
 	_"fmt"
 	"fmt"
 )
+import  "go.uber.org/zap"
 var zbxKey2App map[string]string =  make(map[string]string)
 var app2itemNum map[string]int = make(map[string]int)
-
+var app2Tag map[string]string = make(map[string]string)
 
 func getSections() (map[string]string,map[string]string){
 	cfg, err := ini.InsensitiveLoad("./item.conf")
@@ -23,12 +24,29 @@ func getSections() (map[string]string,map[string]string){
 		app2itemNum[s.Name()] = len(keys)
 		for k,v := range keys{
 			//fmt.Println(k.Value())
-			itemKv[k] = v
-			p2a[v] = k
-			zbxKey2App[k] = s.Name()
+			if k != "tag"{
+				itemKv[k] = v
+				p2a[v] = k
+				zbxKey2App[k] = s.Name()
+			}else{
+				app2Tag[s.Name()] = v
+				app2itemNum[s.Name()] = app2itemNum[s.Name()] - 1
+			}
+
+
+
 		}
 	}
 	return itemKv,p2a
+}
+
+func QueryTag(query string)string{
+	if elem,ok := app2Tag[query];ok{
+		return elem
+	}else {
+		MyLogger.Error("can not find the app tag",zap.String("info",query))
+		return ""
+	}
 }
 
 func QuerySection(query string) (string,error){
@@ -40,7 +58,7 @@ func QuerySection(query string) (string,error){
 		if ok{
 			return elem,nil
 		}else{
-			return zbxKey2App["REG_"+query],nil
+			return "",nil
 		}
 
 	}
