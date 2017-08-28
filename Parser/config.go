@@ -30,7 +30,7 @@ func getSections() (map[string]string,map[string]string){
 				zbxKey2App[k] = s.Name()
 			}else{
 				app2Tag[s.Name()] = v
-				app2itemNum[s.Name()] = app2itemNum[s.Name()] - 1
+				//app2itemNum[s.Name()] = app2itemNum[s.Name()] - 1
 			}
 
 

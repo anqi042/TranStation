@@ -49,8 +49,8 @@ func GetHMap(key string) map[string]string{
 	num,_ := res.Result()
 	//number excludes  app and host
 	num -= 2
-	if num < int64(QuerySectionNumber(fields[1])){
-		MyLogger.Info("not enough values")
+	if num != int64(QuerySectionNumber(fields[1])){
+		//MyLogger.Info("not enough values")
 		return nil
 	}else{
 		hmap := client.HGetAll(key)

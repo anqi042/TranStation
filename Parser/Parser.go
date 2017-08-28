@@ -2,7 +2,7 @@ package Parser
 
 import "fmt"
 import (
-	"encoding/json"
+	//"encoding/json"
 	"strings"
 	"github.com/emirpasic/gods/sets/hashset"
 	"regexp"
@@ -93,9 +93,9 @@ func RaiseParser(in chan []byte)  {
 					for _,k := range ks{
 						m := GetHMap(k)
 						if m != nil{
-							MyLogger.Info("get map:",zap.Any("hmap",m))
-							res := FormatOutput(m)
-							MyLogger.Info("formatted:",zap.String("result",res))
+							//MyLogger.Info("get map:",zap.Any("hmap",m))
+							//res := FormatOutput(m)
+							//MyLogger.Info("formatted:",zap.String("result",res))
 						}
 
 					}
@@ -116,60 +116,97 @@ func matchReg(src string,regs []*regexp.Regexp) bool {
 	}
 	return false
 }
+/*
+check if the key is what we want;
+if it equal to a string,then return its topic
+if it match a reg,return its topic and match value
+else return empty string
 
-func translateZbxKey(zbxkey string,regs []*regexp.Regexp, eqSet *hashset.Set,p2a map[string]string) (string,bool){
+ */
+func translateZbxKey(zbxkey string,regs []*regexp.Regexp, eqSet *hashset.Set,p2a map[string]string) (string,string){
 
 	if eqSet.Contains(zbxkey){
-		return p2a[zbxkey],false
+		return p2a[zbxkey],""
 	}
 	for _,v := range regs{
-		if v.Match([]byte(zbxkey)){
-			return p2a[v.String()],true
+
+		match := v.FindStringSubmatch(zbxkey)
+
+
+		//MyLogger.Info("match info",zap.String(zbxkey,v.String()),zap.Any("match",len(match)))
+
+		if len(match) == 2{
+			return p2a[v.String()],match[1]
 		}
 	}
 
-	return "",false
+	return "",""
 
 }
 
 func parseBody(body []byte,inMap  chan *HostKV , regs []*regexp.Regexp, eqSet *hashset.Set, p2a map[string]string){
-	var dat map[string]interface{}
-	rNum,_ := regexp.Compile("[0-9]+")
-	err := json.Unmarshal(body,&dat)
-	if err != nil{
-		fmt.Println(err)
-	}else{
+	const TAG_SPLIT_BODY="$"
+	strs := strings.Split(string(body),TAG_SPLIT_BODY)
+	data := make( []map[string]string,0)
+	if len(strs) % 3 != 0{
+		MyLogger.Info("BODY FUCKER ",zap.Any("this len",len(strs)))
 
-		data := dat["data"].([]interface{})
-		for _,v := range data{
-			theMap := v.(map[string]interface{})
-			fmt.Println(theMap["host"], theMap["key"], theMap["value"])
-			//filter here
-			if str,needNumber := translateZbxKey(theMap["key"].(string),regs,eqSet,p2a);str != ""{
-				fmt.Println(str)
-				app, _ := QuerySection(str)
-				if needNumber{
-					res := rNum.Find([]byte(theMap["key"].(string)))
-					fmt.Println("res Number=",string(res))
+		return
+	}else {
+		datai := 0
+		//host key value
+		for i := 0;i < len(strs) ;  {
+			if strings.Contains(strs[i+1],"discovery") || strs[i] == ""||strs[i+1] == ""||strs[i+2] == ""{
+				 //skip this group
+			}else {
+				data = append(data,make(map[string]string))
+				data[datai]["host"] = strs[i]
+				data[datai]["key"] = strs[i+1]
+				data[datai]["value"] = strs[i+2]
+				datai++
 
-					tmp := &HostKV{theMap["host"].(string), app +".TAG", string(res),app}
-					inMap <- tmp
-				}
-				tmp := &HostKV{theMap["host"].(string),str, theMap["value"].(string),app}
-
-				if len(inMap) > 900{
-					//
-					MyLogger.Warn("body to json channel is almost full")
-					time.Sleep(time.Second)
-
-				}else{
-					inMap <- tmp
-				}
-
-
-			}else{
-				MyLogger.Info("useless key, discard it")
 			}
+			i += 3
+
 		}
 	}
+	//debug
+	//for _,_v := range regs{
+	//	MyLogger.Info("reg",zap.String("reg",_v.String()))
+	//}
+
+	for _,v := range data{
+
+
+		//filter here
+		if str,match := translateZbxKey(v["key"],regs,eqSet,p2a);str != ""{
+			//MyLogger.Info("Got a metric:",zap.String("topic",str))
+			app, _ := QuerySection(str)
+			if match != ""{
+				tmp := &HostKV{v["host"], app +".TAG", match,app}
+				MyLogger.Info("Got a tag:",zap.String("tag",match))
+				inMap <- tmp
+			}
+			tmp := &HostKV{v["host"],str, v["value"],app}
+
+			if len(inMap) > 900{
+				//
+				MyLogger.Warn("body to json channel is almost full")
+				time.Sleep(time.Second)
+
+			}else{
+				MyLogger.Info("Add new hostKV",zap.Any("key",tmp.key),zap.Any("val",tmp.val),zap.Any("host",tmp.host))
+				inMap <- tmp
+			}
+
+
+		}else{
+			//MyLogger.Info("useless key, discard it")
+		}
+
+	}
+
+
+
+
 }
